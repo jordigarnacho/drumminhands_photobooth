@@ -7,16 +7,21 @@ import glob
 import time
 import traceback
 from time import sleep
-import RPi.GPIO as GPIO
-import picamera # http://picamera.readthedocs.org/en/release-1.4/install2.html
+#import RPi.GPIO as GPIO
+#import picamera # http://picamera.readthedocs.org/en/release-1.4/install2.html
 import atexit
 import sys
 import socket
 import pygame
-from pygame.locals import QUIT, KEYDOWN, K_ESCAPE
-import pytumblr # https://github.com/tumblr/pytumblr
+from pygame.locals import QUIT, KEYDOWN, K_ESCAPE, K_RETURN
+#import pytumblr # https://github.com/tumblr/pytumblr
 import config # this is the config python file config.py
-from signal import alarm, signal, SIGALRM, SIGKILL
+#from signal import alarm, signal, SIGALRM, SIGKILL
+
+# import numpy
+#import numpy as np
+# import opencv
+import cv2
 
 ########################
 ### Variables Config ###
@@ -54,18 +59,18 @@ replay_cycles = 2 # how many times to show each photo on-screen after taking
 real_path = os.path.dirname(os.path.realpath(__file__))
 
 # Setup the tumblr OAuth Client
-client = pytumblr.TumblrRestClient(
-    config.consumer_key,
-    config.consumer_secret,
-    config.oath_token,
-    config.oath_secret,
-)
+#client = pytumblr.TumblrRestClient(
+#    config.consumer_key,
+#    config.consumer_secret,
+#    config.oath_token,
+#   config.oath_secret,
+#)
 
 # GPIO setup
-GPIO.setmode(GPIO.BOARD)
-GPIO.setup(led_pin,GPIO.OUT) # LED
-GPIO.setup(btn_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.output(led_pin,False) #for some reason the pin turns on at the beginning of the program. Why?
+#GPIO.setmode(GPIO.BOARD)
+#GPIO.setup(led_pin,GPIO.OUT) # LED
+#GPIO.setup(btn_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+#GPIO.output(led_pin,False) #for some reason the pin turns on at the beginning of the program. Why?
 
 # initialize pygame
 pygame.init()
@@ -83,7 +88,7 @@ pygame.display.toggle_fullscreen()
 def cleanup():
   print('Ended abruptly')
   pygame.quit()
-  GPIO.cleanup()
+  #GPIO.cleanup()
 atexit.register(cleanup)
 
 # A function to handle keyboard/mouse/device input events    
@@ -92,6 +97,9 @@ def input(events):
         if (event.type == QUIT or
             (event.type == KEYDOWN and event.key == K_ESCAPE)):
             pygame.quit()
+        elif(event.type == KEYDOWN and event.key == K_RETURN):
+                time.sleep(config.debounce) #debounce
+                start_photobooth()
                 
 #delete files in folder
 def clear_pics(channel):
@@ -101,9 +109,9 @@ def clear_pics(channel):
 	#light the lights in series to show completed
 	print "Deleted previous pics"
 	for x in range(0, 3): #blink light
-		GPIO.output(led_pin,True); 
+		#GPIO.output(led_pin,True); 
 		sleep(0.25)
-		GPIO.output(led_pin,False);
+		#GPIO.output(led_pin,False);
 		sleep(0.25)
 
 # check if connected to the internet   
@@ -191,34 +199,35 @@ def display_pics(jpg_group):
 				
 # define the photo taking function for when the big button is pressed 
 def start_photobooth(): 
+	cap = cv2.VideoCapture(1)
 
 	input(pygame.event.get()) # press escape to exit pygame. Then press ctrl-c to exit python.
 
 	################################# Begin Step 1 #################################
 	
 	print "Get Ready"
-	GPIO.output(led_pin,False);
-	show_image(real_path + "/instructions.png")
+	#GPIO.output(led_pin,False);
+	show_image(os.path.join(real_path, "instructions.png"))
 	sleep(prep_delay)
 	
 	# clear the screen
 	clear_screen()
 	
-	camera = picamera.PiCamera()  
-	camera.vflip = False
-	camera.hflip = True # flip for preview, showing users a mirror image
-	camera.saturation = -100 # comment out this line if you want color images
-	camera.iso = config.camera_iso
+	#camera = picamera.PiCamera()  
+	#camera.vflip = False
+	#camera.hflip = True # flip for preview, showing users a mirror image
+	#camera.saturation = -100 # comment out this line if you want color images
+	#camera.iso = config.camera_iso
 	
 	pixel_width = 0 # local variable declaration
 	pixel_height = 0 # local variable declaration
 	
-	if config.hi_res_pics:
-		camera.resolution = (high_res_w, high_res_h) # set camera resolution to high res
-	else:
-		pixel_width = 500 # maximum width of animated gif on tumblr
-		pixel_height = config.monitor_h * pixel_width // config.monitor_w
-		camera.resolution = (pixel_width, pixel_height) # set camera resolution to low res
+	#if config.hi_res_pics:
+		#camera.resolution = (high_res_w, high_res_h) # set camera resolution to high res
+	#else:
+		#pixel_width = 500 # maximum width of animated gif on tumblr
+		#pixel_height = config.monitor_h * pixel_width // config.monitor_w
+		#camera.resolution = (pixel_width, pixel_height) # set camera resolution to low res
 		
 	################################# Begin Step 2 #################################
 	
@@ -229,38 +238,49 @@ def start_photobooth():
 	if config.capture_count_pics:
 		try: # take the photos
 			for i in range(1,total_pics+1):
-				camera.hflip = True # preview a mirror image
-				camera.start_preview(resolution=(config.monitor_w, config.monitor_h)) # start preview at low res but the right ratio
+				#camera.hflip = True # preview a mirror image
+				#camera.start_preview(resolution=(config.monitor_w, config.monitor_h)) # start preview at low res but the right ratio
 				time.sleep(2) #warm up camera
-				GPIO.output(led_pin,True) #turn on the LED
+				ret, frame = cap.read()
+				pygame.mixer.music.load(os.path.join(real_path, "song/snap.mp3"))				
+				pygame.mixer.music.play()
+				#GPIO.output(led_pin,True) #turn on the LED
 				filename = config.file_path + now + '-0' + str(i) + '.jpg'
-				camera.hflip = False # flip back when taking photo
-				camera.capture(filename)
+				#camera.hflip = False # flip back when taking photo
+				#camera.capture(filename)
+				cv2.imwrite(filename, frame)
 				print(filename)
-				GPIO.output(led_pin,False) #turn off the LED
-				camera.stop_preview()
-				show_image(real_path + "/pose" + str(i) + ".png")
+				#GPIO.output(led_pin,False) #turn off the LED
+				#camera.stop_preview()
+				show_image(os.path.join(real_path, "pose" + str(i) + ".png"))
 				time.sleep(capture_delay) # pause in-between shots
 				clear_screen()
 				if i == total_pics+1:
 					break
 		finally:
-			camera.close()
+			#camera.close()
+			cap.release()
 	else:
-		camera.start_preview(resolution=(config.monitor_w, config.monitor_h)) # start preview at low res but the right ratio
+		#camera.start_preview(resolution=(config.monitor_w, config.monitor_h)) # start preview at low res but the right ratio
 		time.sleep(2) #warm up camera
 		
 		try: #take the photos
-			for i, filename in enumerate(camera.capture_continuous(config.file_path + now + '-' + '{counter:02d}.jpg')):
-				GPIO.output(led_pin,True) #turn on the LED
+			#for i, filename in enumerate(camera.capture_continuous(config.file_path + now + '-' + '{counter:02d}.jpg')):
+			for i in range(1,total_pics+1) :
+				ret, frame = cap.read()
+				pygame.mixer.music.play()
+				#GPIO.output(led_pin,True) #turn on the LED
+				filename = config.file_path + now + '-0' + str(i) + '.jpg'
 				print(filename)
+				cv2.imwrite(filename, frame)
 				time.sleep(capture_delay) # pause in-between shots
-				GPIO.output(led_pin,False) #turn off the LED
-				if i == total_pics-1:
+				#GPIO.output(led_pin,False) #turn off the LED
+				if i == total_pics+1:
 					break
 		finally:
-			camera.stop_preview()
-			camera.close()
+			#camera.stop_preview()
+			#camera.close()
+			cap.release()
 		
 	########################### Begin Step 3 #################################
 	
@@ -269,9 +289,10 @@ def start_photobooth():
 	print "Creating an animated gif" 
 	
 	if config.post_online:
-		show_image(real_path + "/uploading.png")
+		show_image(os.path.join(real_path, "uploading.png"))
 	else:
-		show_image(real_path + "/processing.png")
+		show_image(os.path.join(real_path, "processing.png"))
+		time.sleep(2)
 	
 	if config.make_gifs: # make the gifs
 		if config.hi_res_pics:
@@ -338,13 +359,13 @@ def start_photobooth():
 	print "Done"
 	
 	if config.post_online:
-		show_image(real_path + "/finished.png")
+		show_image(os.path.join(real_path, "finished.png"))
 	else:
-		show_image(real_path + "/finished2.png")
+		show_image(os.path.join(real_path, "finished2.png"))
 	
 	time.sleep(restart_delay)
-	show_image(real_path + "/intro.png");
-	GPIO.output(led_pin,True) #turn on the LED
+	show_image(os.path.join(real_path, "intro.png"));
+	#GPIO.output(led_pin,True) #turn on the LED
 
 ####################
 ### Main Program ###
@@ -356,16 +377,16 @@ if config.clear_on_startup:
 
 print "Photo booth app running..." 
 for x in range(0, 5): #blink light to show the app is running
-	GPIO.output(led_pin,True)
+	#GPIO.output(led_pin,True)
 	sleep(0.25)
-	GPIO.output(led_pin,False)
+	#GPIO.output(led_pin,False)
 	sleep(0.25)
 
-show_image(real_path + "/intro.png");
+show_image(os.path.join(real_path, "intro.png"));
 
 while True:
-	GPIO.output(led_pin,True); #turn on the light showing users they can push the button
+	#GPIO.output(led_pin,True); #turn on the light showing users they can push the button
 	input(pygame.event.get()) # press escape to exit pygame. Then press ctrl-c to exit python.
-	GPIO.wait_for_edge(btn_pin, GPIO.FALLING)
-	time.sleep(config.debounce) #debounce
-	start_photobooth()
+	#GPIO.wait_for_edge(btn_pin, GPIO.FALLING)
+	#time.sleep(config.debounce) #debounce
+	#start_photobooth()
